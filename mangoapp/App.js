@@ -1,4 +1,4 @@
-let AppVersionNumber = "v. 1.8.14 beta";
+let AppVersionNumber = "v. 1.8.15.10 beta";
 
 /* APP META-DATA, AUTHORSHIP, AND OTHER STUFF
 **
@@ -28,6 +28,7 @@ let AppVersionNumber = "v. 1.8.14 beta";
 ** Latest stable verion v.1.7.12.10 june 13, 2018
 ** Latest stable version v.1.7.15.10 june 14, 2018
 ** Latest stable version v.1.7.20.1 june 15, 2018
+** Latest stable version v.1.8.15.1 june 20, 2018
 **
 ** VERSION NUMBERS
 ** For debugging, building and consistency purposes, the first line should
@@ -781,12 +782,11 @@ export class ElementsTaskDetails extends React.Component{
 	userWorkerObj = {'ID': null, 'data': null};
 	renderConditionalWorker(){
 		if(this.props.dataTask.data.STATUS != 'UNASIGNED'){
-			return <ElementsProfileListItem dataUser={this.userWorkerObj}><Entypo name='suitcase' size={16} style={{margin: 8}}></Entypo></ElementsProfileListItem>
+			return <ElementsProfileListItem dataUser={this.userWorkerObj} showBorder={false} ><Entypo name='suitcase' size={16} style={{margin: 8}}></Entypo></ElementsProfileListItem>
 		}
 	}
 	componentWillMount(){
 		let uidClient = this.props.dataTask.data.USERS.find((item) => item['ROLE'] == 'CLIENT')['UID'];
-
 		firebase.firestore().collection('USERS').doc(uidClient).get().then((doc)=>{
 			this.userClientObj['ID'] = doc.id;
 			this.userClientObj['data'] = doc.data();
@@ -1011,7 +1011,7 @@ export class ElementsChatToolbar extends React.Component{
 		return(
 			<View style={{padding: 8, paddingTop: 4, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: 'rgba(160,160,160,0.8)'}}>
 				<ElementsChatToolbarButton title='EDITAR' buttonColor='rgba(160,160,160,0.2)' style={{flex: 1}} onPress={()=>{
-					App.modalPromptOpen(<PromptEditTask dataTask={this.props.dataTask}></PromptEditTask>)
+					App.modalPromptOpen(<PromptEditTask dataTask={this.props.dataTask} ></PromptEditTask>)
 				}}></ElementsChatToolbarButton>
 				<ElementsChatToolbarButton type='outline' title='ELIMINAR' buttonColor='rgb(255,59,48)' textColor='rgb(255,59,48)' style={{flex: 1}} ></ElementsChatToolbarButton>
 			</View>
@@ -1556,7 +1556,6 @@ export class PromptEditTask extends React.Component{
 			ADDRESS: this.state.newLocation.address,
 			LAST_UPDATE: new Date(),
 		});
-		this.forceUpdate();
 		App.modalPromptClose();
 	}
 	render(){
@@ -1873,7 +1872,7 @@ export class ScreenExplore extends React.Component{
 					</ElementsHeaderToolbar>
 					<View style={{padding: 16}}>
 						<Text style={{margin: 8, fontSize: 24, fontWeight: '800'}}>Tareas cerca de mí</Text>
-						{arrayTasksData.filter((item) => item.data.STATUS == 'UNASIGNED' ).map((l,i)=>{
+						{this.props.screenProps.arrayTasksData.filter((item) => item.data.STATUS == 'UNASIGNED' ).map((l,i)=>{
 							return <ElementsTaskListItem dataTask={l} onPress={()=>{ this.props.navigation.navigate('ScreenExploreTask', {dataTask: l}) }}/>
 						})}
 					</View>
@@ -1887,19 +1886,28 @@ export class ScreenExplore extends React.Component{
 			</SafeAreaView>
 		)
 	}
-}
 
+	componentDidMount(){
+		//alert(JSON.stringify(this.props))
+	}
+
+}
 
 export class ScreenTasks extends React.Component{
 	arrayTasks = [];
 	currentUserFirstName = '';
-	async componentWillReceiveProps(){
-		this.forceUpdate();
-	}
+
 	async componentWillMount(){
 		//this.getTasks();
 		this.currentUserFirstName = await objCurrentUserData.data.NAME.split(" ")[0];
-		this.forceUpdate();
+	}
+
+	renderTasks(){
+		return this.props.screenProps.arrayTasksData.filter((item) => item.notifyUser == true ).map((l,i)=>{
+			return <ElementsNotificationListItem dataTask={l} key={i} onPress={()=>{
+				this.props.navigation.navigate("ScreenTasksConversation", {dataTask: l })
+			}}></ElementsNotificationListItem>
+		})
 	}
 
 	render(){
@@ -1919,9 +1927,7 @@ export class ScreenTasks extends React.Component{
 						<View style={{width: 48, height: 48, borderRadius: 24, backgroundColor: 'black', margin: 8}}></View>
 					</TouchableOpacity>
 					<View style={{padding: 16}}>
-						{arrayTasksData.filter((task) => task.notifyUser == true ).map((l,i)=>{
-							return <ElementsNotificationListItem dataTask={l} key={i} onPress={()=>{this.props.navigation.navigate("ScreenTasksConversation", {dataTask: l})}}></ElementsNotificationListItem>
-						})}
+						{this.renderTasks()}
 					</View>
 					<View style={{padding: 16}}>
 						<ElementsInputButton title='CERRAR SESIÓN' buttonColor='rgba(200,200,200,0.6)' type='fill' onPress={()=>{firebase.auth().signOut()}} />
@@ -1931,12 +1937,13 @@ export class ScreenTasks extends React.Component{
 			</SafeAreaView>
 		)
 	}
+	componentDidMount(){
+		this.forceUpdate();
+	}
 }
 
 export class ScreenTasksConversation extends React.Component{
-	static navigationOptions = {
-		tabBarVisible: false,
-	}
+
 	arrayInterestedWorkers = []
 
 	getInterestedWorkers(){
@@ -1958,7 +1965,7 @@ export class ScreenTasksConversation extends React.Component{
 						return <ElementsProfileListItem dataUser={l} onPress={()=>{
 							App.modalPromptOpen(<PromptUserProfile dataUser={l} dataCategoryUser={this.props.navigation.state.params.dataTask.data.CATEGORY} onHire={()=>{ UtilitiesTask.userHire( this.props.navigation.state.params.dataTask , l.ID ) }}></PromptUserProfile>)
 						}}>
-							<ElementsInputButton compact type='fill' title='CONTRATAR' onPress={()=>{}}></ElementsInputButton>
+							<ElementsInputButton compact type='fill' title='CONTRATAR' onPress={()=>{ UtilitiesTask.userHire( this.props.navigation.state.params.dataTask , l.ID ) }}></ElementsInputButton>
 						</ElementsProfileListItem>
 					})}
 				</View>
@@ -1984,20 +1991,8 @@ export class ScreenTasksConversation extends React.Component{
 			)
 		}
 	}
-
-	componentWillReceiveProps(){
-		alert('qwertyuiop');
-
-		this.getInterestedWorkers();
-		this.forceUpdate();
-	}
-
 	componentWillMount(){
 		this.getInterestedWorkers();
-	}
-
-	componentDidMount(){
-		this.chatScrollView.scrollToEnd({animated: false})
 	}
 
 	render(){
@@ -2008,7 +2003,7 @@ export class ScreenTasksConversation extends React.Component{
 					{this.renderInterestedWorkers()}
 					{this.renderTaskContents()}
 				</ScrollView>
-				<ElementsChatToolbar dataTask={this.props.navigation.state.params.dataTask}></ElementsChatToolbar>
+				<ElementsChatToolbar dataTask={this.props.navigation.state.params.dataTask} ></ElementsChatToolbar>
 			</SafeAreaView>
 		)
 	}
@@ -2018,8 +2013,8 @@ const AppContents = TabNavigator({
 	TabScreenExplore: {
 		screen: StackNavigator({
 			ScreenExplore: { screen: ScreenExplore},
-			ScreenExploreProfile: {screen: ScreenProfile,  navigationOptions: () => ({tabBarVisible: false}) },
-			ScreenExploreTask: {screen: ScreenTasksConversation,  navigationOptions: () => ({tabBarVisible: false}) },
+			ScreenExploreProfile: {screen: ScreenProfile},
+			ScreenExploreTask: {screen: ScreenTasksConversation},
 		}),
 		navigationOptions: ()=>({
 			tabBarLabel: 'Explorar',
@@ -2038,9 +2033,9 @@ const AppContents = TabNavigator({
 	TabScreenTasks: {
 		screen: StackNavigator({
 			ScreenTasks: {screen: ScreenTasks},
-			ScreenTasksConversation: {screen: ScreenTasksConversation,  navigationOptions: () => ({tabBarVisible: false}) },
-			ScreenSettings: {screen: ScreenSettings,  navigationOptions: () => ({tabBarVisible: false}) },
-			ScreenTasksProfile: {screen: ScreenProfile,  navigationOptions: () => ({tabBarVisible: false}) }
+			ScreenTasksConversation: {screen: ScreenTasksConversation},
+			ScreenSettings: {screen: ScreenSettings},
+			ScreenTasksProfile: {screen: ScreenProfile}
 		}),
 		navigationOptions: ()=>({
 			tabBarLabel: 'Buzón',
@@ -2090,22 +2085,26 @@ export default class App extends React.Component {
 
 	getCurrentUserData(){
 		firebase.firestore().collection('USERS').doc(firebase.auth().currentUser.uid).onSnapshot((doc)=>{
+			this.forceUpdate();
 			objCurrentUserData = {'ID': doc.id, 'data': doc.data()}
 		}).then(()=>{
-			thisApp.forceUpdate();
+			this.forceUpdate();
 		})
 	}
 	getCategoriesData(){
 		firebase.firestore().collection('CATEGORIES').onSnapshot((data)=>{
+			this.forceUpdate();
 			arrayCategoriesData = [];
 			data.forEach((doc)=>{
 				arrayCategoriesData.push({'ID': doc.id, 'data': doc.data()})
 			});
-			thisApp.forceUpdate();
+			this.forceUpdate();
 		});
 	}
 	getTasksData(){
 		firebase.firestore().collection('TASKS').onSnapshot((data)=>{
+			alert('UPDATE TO TASKS')
+			this.forceUpdate();
 			arrayTasksData = [];
 			data.forEach((doc)=>{
 				let notifyUser = doc.data().USERS.find((USER) => USER.UID === firebase.auth().currentUser.uid);
@@ -2116,7 +2115,7 @@ export default class App extends React.Component {
 
 				arrayTasksData.push({'ID': doc.id, 'data': doc.data(), 'userRole': userRole, 'notifyUser': notifyUser != undefined});
 			});
-			thisApp.forceUpdate()
+			this.forceUpdate();
 		});
 	}
   async componentWillMount(){
@@ -2150,7 +2149,9 @@ export default class App extends React.Component {
       return(
 				<KeyboardAvoidingView style={{height: '100%', width: '100%', flex: 1}} behavior='padding'>
 					{this.renderModalPrompt()}
-					<AppContents arrayTasksData={arrayTasksData} arrayCategoriesData={arrayCategoriesData} objCurrentUserData={objCurrentUserData} ></AppContents>
+					<AppContents screenProps={{
+						'arrayTasksData': arrayTasksData
+					}}></AppContents>
 				</KeyboardAvoidingView>
 			)
     } else {
