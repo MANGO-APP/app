@@ -1,4 +1,4 @@
-let AppVersionNumber = "v. 1.8.15.10 beta";
+let AppVersionNumber = "v. 1.8.26.3 beta";
 
 /* APP META-DATA, AUTHORSHIP, AND OTHER STUFF
 **
@@ -29,6 +29,15 @@ let AppVersionNumber = "v. 1.8.15.10 beta";
 ** Latest stable version v.1.7.15.10 june 14, 2018
 ** Latest stable version v.1.7.20.1 june 15, 2018
 ** Latest stable version v.1.8.15.1 june 20, 2018
+** Latest stable version v.1.8.20.6 june 26, 2018
+** === FIRST INSIDER BETA scheduled june 27, 2018
+**
+**  ROADMAP
+** -- * NEW NOTIFICATION ELEMENT (FOR INTEGRATION WITH CHAT HEADER AND PUSH NOTIFICATIONS)
+** -- ADD DESCRIPTION TEXT (OPTIONAL) TO ElementsTaskListItem
+** -- VIEW CART AND CHECKOUT
+** -- * DISPLAY MAP ON ScreenExplore
+** -- DISPLAY CATEGORIES OPTION ON ScreenExplore
 **
 ** VERSION NUMBERS
 ** For debugging, building and consistency purposes, the first line should
@@ -53,7 +62,7 @@ let AppVersionNumber = "v. 1.8.15.10 beta";
 /* -- REACT, EXPO, REACT NAVIGATION */
 import React from 'react';
 import { StyleSheet, Text, View, Dimensions, SafeAreaView, KeyboardAvoidingView, ScrollView, TextInput, TouchableOpacity, Image, Alert } from 'react-native';
-import { ImagePicker, Permissions, Location, MapView, Haptic, BlurView} from 'expo';
+import { ImagePicker, Permissions, Location, MapView, BlurView, LinearGradient, Notifications} from 'expo';
 import {Ionicons, MaterialCommunityIcons, MaterialIcons, FontAwesome, Entypo} from '@expo/vector-icons';
 import {StackNavigator, TabNavigator} from 'react-navigation';
 /* -- FIREBASE (AND FIREBASE FIRESTORE) */
@@ -74,18 +83,27 @@ let objCurrentUserData = {};
 /* ============================== */
 /* ==== UTILITIES ==== */
 
+/* -- NOTIFICATIONS */
+export class UtilitiesNotifications {
+
+}
+
 /* -- TASKS */
 export class UtilitiesTask {
 	static userApply( dataTask, uidWorker ){
-		dataTask.data.USERS.push({
-			'UID': uidWorker,
-			'ROLE': 'INTERESTED'
-		});
-		firebase.firestore().collection('TASKS').doc(dataTask.ID).update({
-			USERS: dataTask.data.USERS,
-			LAST_UPDATE: new Date(),
-		});
-		thisApp.forceUpdate();
+		if( !objCurrentUserData.data.JOB_CATEGORIES.some((item) => item['NAME'] == dataTask.data.CATEGORY) ){
+			alert('Necesitas un perfil de '+dataTask.data.CATEGORY+' para realizar este trabajo');
+		} else {
+			dataTask.data.USERS.push({
+				'UID': uidWorker,
+				'ROLE': 'INTERESTED'
+			});
+			firebase.firestore().collection('TASKS').doc(dataTask.ID).update({
+				USERS: dataTask.data.USERS,
+				LAST_UPDATE: new Date(),
+			});
+			thisApp.forceUpdate();
+		}
 	}
 
 	static userApplyCancel( dataTask, uidWorker ){
@@ -168,6 +186,9 @@ export class UtilitiesTask {
 		thisApp.forceUpdate();
 	}
 
+	static removeTask( dataTask ){
+		firebase.firestore().collection('TASKS').doc(dataTask.ID).delete();
+	}
 
 }
 /* -- PRICE */
@@ -257,7 +278,7 @@ export class ElementsInputName extends React.Component{
           <TextInput placeholder={this.props.name} value={this.props.value} style={{padding: 0, margin: 2, fontSize: 16, flexGrow: 1}} onChangeText={(newText)=>{
             this.setState({value: newText});
             this.props.onChangeText(newText);
-          }}></TextInput>
+          }} onSubmitEditing={this.props.onSubmitEditing}></TextInput>
           {this.props.children}
         </View>
       </View>
@@ -472,8 +493,8 @@ export class ElementsInputLocation extends React.Component {
       <View style={[{margin: 4, borderRadius: 8}, this.returnConditionalStyleFocus()]}>
       {this.renderConditionalName()}
       {this.renderConditionalMap()}
-        <View style={[{flexDirection: 'row', alignItems: 'center', padding: 14, margin: 4, borderRadius: 8}, this.returnConditionalStyleValue(), this.returnConditionalStylePadding()]}>
-          <TextInput placeholder={this.props.name} value={this.state.value} style={{padding: 0, margin: 2, fontSize: 16, flexGrow: 1}}
+        <View style={[{flexDirection: 'row', alignItems: 'center', padding: 14, margin: 4, borderRadius: 8, flex: 1}, this.returnConditionalStyleValue(), this.returnConditionalStylePadding()]}>
+          <TextInput  multiline={true} placeholder={this.props.name} value={this.state.value} style={{margin: 2, fontSize: 16, flexGrow: 1}}
             onFocus={()=>{ this.setState({isFocused: true}) }}
             onBlur={()=>{ this.setState({isFocused: false}) }}
             onChangeText={(newText)=>{
@@ -584,6 +605,8 @@ export class ElementsInputSelectList extends React.Component{
     })
   }
 }
+/* -- INPUT TOGGLE */
+
 
 /* UI ELEMENTS / USERS */
 /* -- LIST TIEM USER */
@@ -644,7 +667,7 @@ export class ElementsProfileListItem extends React.Component{
 					<Image style={{height: 40, width: 40, borderRadius: 20, margin: 4, backgroundColor: 'black'}} source={{uri: this.profileURL}}></Image>
 					<View style={{margin: 4}}>
 						<Text style={{fontSize: 18, fontWeight: '600'}}>{this.name}</Text>
-						<Text style={{fontSize: 12}}>{this.username}</Text>
+						<Text style={{fontSize: 12}}>{'@'+this.username}</Text>
 					</View>
 				</View>
 				{this.props.children}
@@ -692,7 +715,7 @@ export class ElementsProfileCard extends React.Component{
 					<Image style={{height: 64, width: 64, borderRadius: 32, margin: 8, backgroundColor: 'black'}} source={{uri: this.profileURL}}></Image>
 					<View style={{margin: 8}}>
 						<Text style={{fontSize: 24, fontWeight: '600'}}>{this.name}</Text>
-						<Text style={{fontSize: 16}}>{this.username}</Text>
+						<Text style={{fontSize: 16}}>{'@'+this.username}</Text>
 					</View>
 				</View>
 
@@ -782,7 +805,7 @@ export class ElementsTaskDetails extends React.Component{
 	userWorkerObj = {'ID': null, 'data': null};
 	renderConditionalWorker(){
 		if(this.props.dataTask.data.STATUS != 'UNASIGNED'){
-			return <ElementsProfileListItem dataUser={this.userWorkerObj} showBorder={false} ><Entypo name='suitcase' size={16} style={{margin: 8}}></Entypo></ElementsProfileListItem>
+			return <ElementsProfileListItem dataUser={this.userWorkerObj} showBorder={false} ><MaterialCommunityIcons name='worker' color='rgb(160,160,160)' size={24} style={{margin: 4}}/></ElementsProfileListItem>
 		}
 	}
 	componentWillMount(){
@@ -805,35 +828,40 @@ export class ElementsTaskDetails extends React.Component{
 	}
 	render(){
 		return(
-			<View style={{padding: 8, margin: 8, borderWidth: 1, borderColor: 'rgba(160,160,160,0.2)', borderRadius: 8}}>
-				<ElementsTaskListItem dataTask={this.props.dataTask} showBorder={false}></ElementsTaskListItem>
+			<View style={{margin: 8, borderWidth: 1, borderColor: 'rgba(160,160,160,0.2)', borderRadius: 8}}>
+				<View style={{padding: 8, paddingTop: 0, paddingBottom: 0}}>
+					<ElementsProfileListItem dataUser={this.userClientObj} showBorder={false}>
+						<MaterialCommunityIcons name='security-home' color='rgb(76,217,100)' size={24} style={{margin: 4}}/>
+					</ElementsProfileListItem>
+				</View>
 				<MapView region={{
 					latitude: this.props.dataTask.data.LOCATION._lat,
 					longitude: this.props.dataTask.data.LOCATION._long,
 					latitudeDelta: 0.002,
 					longitudeDelta: 0.002,
-				}} style={{ margin: 8, height: 160 }} cacheEnabled>
+				}} style={{ height: 160 }} cacheEnabled>
 					<MapView.Marker coordinate={{latitude: this.props.dataTask.data.LOCATION._lat, longitude: this.props.dataTask.data.LOCATION._long}} />
 				</MapView>
-
-				<ElementsProfileListItem dataUser={this.userClientObj} showBorder={false}></ElementsProfileListItem>
-				<View style={{padding: 8, paddingTop: 0, paddingBottom: 16, borderBottomColor: 'rgba(160,160,160,0.4)', borderBottomWidth: 1}}>
-					<Text style={{fontSize: 18}}>{this.props.dataTask.data.DESCRIPTION}</Text>
+				<View style={{padding: 8, paddingTop: 0, paddingBottom: 0}}>
+					<ElementsTaskListItem dataTask={this.props.dataTask}></ElementsTaskListItem>
+					{this.renderConditionalWorker()}
 				</View>
-				{this.renderConditionalWorker()}
 			</View>
 		)
 	}
 }
 /* -- TASK NOTIFICATION LIST ITEM */
-export class ElementsNotificationListItem extends React.Component{
+export class DEPRECATEDElementsNotificationListItem extends React.Component{
 	//! CHANGE NAME
 	notificationTitle = '';
 	notificationSubtitle = '';
+	objCategoryIcon = {};
 	returnConditionalTitle(){
 		if(this.props.dataTask.data.STATUS == 'UNASIGNED'){
+			//UNASINGED
 			this.notificationTitle = 'Nueva tarea de '+this.props.dataTask.data.CATEGORY;
 		} else if (this.props.dataTask.data.STATUS == 'ASIGNED'){
+			//ASIGNED
 			if(this.props.dataTask.userRole == 'CLIENT'){
 				let uidWorker = this.props.dataTask.data.USERS.find((item) => item['ROLE'] == 'WORKER')['UID'];
 				firebase.firestore().collection('USERS').doc(uidWorker).get().then((doc)=>{
@@ -844,6 +872,8 @@ export class ElementsNotificationListItem extends React.Component{
 				this.notificationTitle = 'Nueva tarea de '+this.props.dataTask.data.CATEGORY;
 			}
 		} else if (this.props.dataTask.data.STATUS == 'ACTIVE'){
+			//ACTIVE
+			this.objCategoryIcon = arrayCategoriesData.find((item) => item['ID'] == this.props.dataTask.data.CATEGORY );
 			if(this.props.dataTask.userRole == 'CLIENT'){
 				let uidWorker = this.props.dataTask.data.USERS.find((item) => item['ROLE'] == 'WORKER')['UID'];
 				firebase.firestore().collection('USERS').doc(uidWorker).get().then((doc)=>{
@@ -910,15 +940,128 @@ export class ElementsNotificationListItem extends React.Component{
 			<TouchableOpacity onPress={this.props.onPress} style={{padding: 4, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: 'rgba(160,160,160,0.2)', paddingTop: 8, paddingBottom: 8}}>
 				{this.renderConditionalIcon()}
 				<View style={{margin: 4}}>
-					<Text style={{fontSize: 18, fontWeight: '600'}}>{this.notificationTitle}</Text>
+					<View style={{flexDirection: 'row'}}>
+						{ContainerCategories.returnCategoryIcon(this.objCategoryIcon.COLLECTION, this.objCategoryIcon.ICON)}
+						<Text style={{fontSize: 18, fontWeight: '600'}}>{this.notificationTitle}</Text>
+					</View>
 					<Text style={{fontSize: 16}}>{this.notificationSubtitle}</Text>
 				</View>
 			</TouchableOpacity>
 		)
 	}
 }
+
+export class ElementsNotificationListItem extends React.Component{
+	objUserData = {'ID': null, 'data': {'NAME': 'Cargando...'}};
+	urlUserProfilePic = '';
+	async getUserData(){
+		let uidUser = this.props.dataTask.data.USERS.find((item) => (item['ROLE'] == 'WORKER' || item['ROLE'] == 'CLIENT') && item['UID'] != firebase.auth().currentUser.uid )['UID'];
+		let docUser = await firebase.firestore().collection('USERS').doc(uidUser).get();
+		this.objUserData['ID'] = docUser.id;
+		this.objUserData['data'] = docUser.data();
+		let uriDownload = await firebase.storage().ref().child('PROFILE_PICS/'+uidUser).getDownloadURL()
+		this.urlUserProfilePic = uriDownload;
+		this.forceUpdate();
+	}
+	returnNotificationTitle(){
+		switch (this.props.dataTask.data.STATUS) {
+			case 'UNASIGNED':
+				return 'Nueva tarea de '+this.props.dataTask.data.CATEGORY;
+				break;
+			case 'ASIGNED':
+				if(this.props.dataTask.userRole == 'CLIENT'){
+					return this.objUserData.data.NAME;
+				} else {
+					return 'Nueva tarea de '+this.props.dataTask.data.CATEGORY;
+				}
+				break;
+			case 'ACTIVE':
+				return this.objUserData.data.NAME;
+				break;
+		}
+	}
+	returnNotificationSubtitle(){
+		switch (this.props.dataTask.data.STATUS) {
+			case 'UNASIGNED':
+				if(this.props.dataTask.userRole == 'CLIENT'){
+					return 'Publicaste una tarea';
+				} else if (this.props.dataTask.userRole == 'INTERESTED'){
+					return 'Tes suscribiste a una tarea';
+				}
+				break;
+			case 'ASIGNED':
+				if(this.props.dataTask.userRole == 'CLIENT'){
+					return 'Asignaste un trabajador';
+				} else if (this.props.dataTask.userRole == 'WORKER'){
+					return 'Fuiste asignado a esta tarea';
+				}
+				break;
+			case 'ACTIVE':
+				return 'Último mensaje'
+		}
+	}
+
+	renderNotificationImage(){
+		switch (this.props.dataTask.data.STATUS){
+			case 'UNASIGNED':
+				return <View style={{height: 48, width: 48, borderRadius: 24, margin: 4, backgroundColor: 'black', justifyContent: 'center', alignItems: 'center'}} />
+				break;
+			case 'ASIGNED':
+				if(this.props.dataTask.userRole == 'CLIENT'){
+					return <Image source={{uri: this.urlUserProfilePic}} style={{height: 48, width: 48, borderRadius: 24, margin: 4, backgroundColor: 'black', justifyContent: 'center', alignItems: 'center'}} />
+				} else if (this.props.dataTask.userRole == 'WORKER'){
+					return <View style={{height: 48, width: 48, borderRadius: 24, margin: 4, backgroundColor: 'black', justifyContent: 'center', alignItems: 'center'}} />
+				}
+				break;
+			case 'ACTIVE':
+				return <Image source={{uri: this.urlUserProfilePic}} style={{height: 48, width: 48, borderRadius: 24, margin: 4, backgroundColor: 'black', justifyContent: 'center', alignItems: 'center'}} />
+				break;
+		}
+	}
+
+	returnWorkerAdminIcon(){
+		if(this.props.dataTask.userRole == 'CLIENT'){
+			return <MaterialCommunityIcons name='security-home' color='rgb(76,217,100)' size={24} style={{margin: 4}}/>
+		} else if (this.props.dataTask.userRole == 'WORKER'){
+			return <MaterialCommunityIcons name='worker' color='rgb(160,160,160)' size={24} style={{margin: 4}}/>
+		} else if (this.props.dataTask.userRole == 'INTERESTED'){
+			return <MaterialCommunityIcons name='eye' color='rgb(160,160,160)' size={24} style={{margin: 4}}/>
+		}
+	}
+
+	async componentWillMount(){
+		if(this.props.dataTask.data.STATUS != 'UNASIGNED'){
+			this.getUserData();
+		}
+		this.forceUpdate();
+	}
+
+	render(){
+		return(
+			<TouchableOpacity onPress={this.props.onPress} style={{padding: 4, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: 'rgba(160,160,160,0.2)', paddingTop: 8, paddingBottom: 8, width: '100%'}}>
+				{this.renderNotificationImage()}
+				<View style={{margin: 4, flex: 2}}>
+					<View style={{flexDirection: 'row'}}>
+						<Text style={{fontSize: 18, fontWeight: '600'}}>{this.returnNotificationTitle()}</Text>
+					</View>
+					<Text style={{fontSize: 16}}>{this.returnNotificationSubtitle()}</Text>
+				</View>
+				{this.returnWorkerAdminIcon()}
+			</TouchableOpacity>
+		)
+	}
+
+}
+
 /* -- TASK LIST ITEM (based on USER LIST ITEM)*/
 export class ElementsTaskListItem extends React.Component{
+	objCategoryIcon = {
+		'ID': 'loading',
+		'data': {
+			'ICON': 'loading',
+			'COLLECTION': 'material-community',
+		}
+	}
 	returnConditionalStyleBorder(){
 		if(this.props.showBorder != false){
 			return {borderBottomColor: 'rgba(160,160,160,0.2)', borderBottomWidth: 1,}
@@ -934,18 +1077,86 @@ export class ElementsTaskListItem extends React.Component{
 			return {borderColor: 'rgba(160,160,160,0.2)', borderWidth: 1, borderRadius: 8, backgroundColor: 'white', padding: 8}
 		}
 	}
+	async componentWillMount(){
+		this.objCategoryIcon = arrayCategoriesData.find((item)=> item['ID'] == this.props.dataTask.data['CATEGORY'] );
+		this.forceUpdate();
+	}
 	render(){
 		return(
-			<TouchableOpacity style={[this.returnConditionalStyleCard(), {flexDirection: 'row', alignItems: 'center', paddingTop: 8, paddingBottom: 8}]} onPress={this.props.onPress}>
+			<TouchableOpacity style={[this.returnConditionalStyleCard(), {paddingTop: 8, paddingBottom: 8}]} onPress={this.props.onPress}>
 				<View style={{flexDirection: 'row', alignItems: 'center', flex: 1, padding: 4}}>
-					<View style={{height: 40, width: 40, borderRadius: 8, margin: 4, backgroundColor: 'black'}}></View>
+					<View style={{height: 40, width: 40, borderRadius: 8, margin: 4, backgroundColor: 'black', justifyContent: 'center', alignContent: 'center', alignItems: 'center'}}>
+					</View>
 					<View style={{margin: 4, flex: 1}}>
 						<Text style={{fontSize: 18, fontWeight: '600', flex: 1}}>{this.props.dataTask.data.CATEGORY}</Text>
 						<Text style={{fontSize: 12, flex: 1}}>{'CERCA DE ' + this.props.dataTask.data.ADDRESS}</Text>
 					</View>
 				</View>
+				<Text style={{margin: 8, fontSize: '16'}}>{this.props.dataTask.data.DESCRIPTION}</Text>
 				{this.props.children}
 			</TouchableOpacity>
+		)
+	}
+}
+/* -- */
+export class ElementsTaskService extends React.Component{
+	state={
+		quantity: 0
+	}
+	addService(){
+		if(this.state.quantity < 11){
+			this.props.onChangeCart({
+				'PRICE': this.props.dataService.PRICE,
+				'TITLE': this.props.dataService.TITLE,
+				'QUANTITY': this.state.quantity+1,
+			})
+			this.setState({quantity: this.state.quantity+1});
+		}
+	}
+	removeService(){
+		if(this.state.quantity > 0){
+			this.props.onChangeCart({
+				'PRICE': this.props.dataService.PRICE,
+				'TITLE': this.props.dataService.TITLE,
+				'QUANTITY': this.state.quantity-1,
+			})
+			this.setState({quantity: this.state.quantity-1});
+		}
+	}
+	renderConditionalControls(){
+		if(this.props.editable){
+			return(
+				<View style={{margin: 2, backgroundColor: 'rgba(160,160,160,0.2)', borderRadius: 8, flexDirection: 'row', alignItems: 'center'}}>
+					<MaterialIcons name='remove' size={24} style={{margin: 6}} onPress={()=>{this.removeService()}}/>
+					<Text style={{fontSize: 16}}>{this.state.quantity}</Text>
+					<MaterialIcons name='add' size={24} style={{margin: 6}} onPress={()=>{this.addService()}}/>
+				</View>
+			)
+		} else {
+			return(
+				<View style={{margin: 2, backgroundColor: 'rgba(160,160,160,0.2)', borderRadius: 8, flexDirection: 'row', alignItems: 'center'}}>
+					<Text style={{fontSize: 16, margin: 6}}>{this.state.quantity}</Text>
+				</View>
+			)
+		}
+	}
+	componentWillMount(){
+		if(this.props.dataService.QUANTITY){
+			this.setState({quantity: this.props.dataService.QUANTITY});
+		}
+	}
+	render(){
+		return(
+			<View style={{margin: 4, flexDirection: 'row', alignItems: 'center'}}>
+				<View style={{margin:2, flex: 1}}>
+					<Text style={{margin: 2, fontSize: 24, fontWeight: '600'}}>{this.props.dataService.TITLE}</Text>
+					<View style={{flexDirection: 'row', alignItems: 'center'}}>
+						{this.renderConditionalControls()}
+						<Text style={{margin: 2, fontSize: 16}}>{'x $' + this.props.dataService.PRICE}</Text>
+					</View>
+				</View>
+				<Text style={{margin: 4, fontSize: 24}}>{ '$'+this.props.dataService.PRICE*this.state.quantity }</Text>
+			</View>
 		)
 	}
 }
@@ -979,10 +1190,17 @@ export class ElementsChatToolbarButton extends React.Component{
 			return {color: 'black'}
 		}
 	}
+	renderConditionalTitle(){
+		if(this.props.title){
+			return(
+				<Text style={[this.returnConditionalStyleTitle(), {margin: 8, fontSize: 16, textAlign: 'center', fontWeight: '600'}]}>{this.props.title}</Text>
+			)
+		}
+	}
 	render(){
 		return(
 			<TouchableOpacity style={[this.props.style, this.returnConditionalStyle(), {margin: 4, minWidth: 48, height: 48, borderRadius: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 0, marginBottom: 0}]} onPress={this.props.onPress}>
-				<Text style={[this.returnConditionalStyleTitle(), {margin: 8, fontSize: 16, textAlign: 'center', fontWeight: '600'}]}>{this.props.title}</Text>
+				{this.renderConditionalTitle()}
 				{this.props.children}
 			</TouchableOpacity>
 		)
@@ -992,6 +1210,7 @@ export class ElementsChatToolbarButton extends React.Component{
 export class ElementsChatToolbar extends React.Component{
 	state={
 		newMessage: '',
+		renderConditionalOptions: false
 	}
 
 	sendMessage(){
@@ -1005,6 +1224,40 @@ export class ElementsChatToolbar extends React.Component{
 		}
 	}
 
+	sendLocation(newLocation){
+		if(newLocation){
+			UtilitiesTask.addToTask( this.props.dataTask , {
+				'CONTENT': newLocation,
+				'TYPE': 'MESSAGE/LOCATION',
+				'USER': firebase.auth().currentUser.uid,
+				'DATE': new Date(),
+			})
+		}
+	}
+
+	sendServices(arrayServicesCart){
+		if(arrayServicesCart.length >= 0){
+			arrayServicesCart.map((l,i)=>{
+				UtilitiesTask.addToTask( this.props.dataTask , {
+					'CONTENT': l,
+					'TYPE': 'SERVICE',
+					'USER': firebase.auth().currentUser.uid,
+					'DATE': new Date(),
+				})
+			})
+		}
+	}
+
+	toggleConditionalOptions(){
+		this.setState({renderConditionalOptions: !this.state.renderConditionalOptions })
+	}
+
+	returnConditionalStyleWidth(){
+		if(!this.state.renderConditionalOptions){
+			return {width: '100%'}
+		}
+	}
+
 	// IMPORTANT everything inside this component should be 48pt in height
 	//UNASIGNED CLIENT
 	renderUnasignedClient(){
@@ -1013,7 +1266,7 @@ export class ElementsChatToolbar extends React.Component{
 				<ElementsChatToolbarButton title='EDITAR' buttonColor='rgba(160,160,160,0.2)' style={{flex: 1}} onPress={()=>{
 					App.modalPromptOpen(<PromptEditTask dataTask={this.props.dataTask} ></PromptEditTask>)
 				}}></ElementsChatToolbarButton>
-				<ElementsChatToolbarButton type='outline' title='ELIMINAR' buttonColor='rgb(255,59,48)' textColor='rgb(255,59,48)' style={{flex: 1}} ></ElementsChatToolbarButton>
+				<ElementsChatToolbarButton type='outline' title='ELIMINAR' buttonColor='rgb(255,59,48)' textColor='rgb(255,59,48)' style={{flex: 1}} onPress={()=>{ UtilitiesTask.removeTask( this.props.dataTask ) }}></ElementsChatToolbarButton>
 			</View>
 		)
 	}
@@ -1066,16 +1319,59 @@ export class ElementsChatToolbar extends React.Component{
 
 	renderActiveClientWorker(){
 		return(
-			<View style={{padding: 12, flexDirection: 'row', alignItems: 'center'}}>
-				<ElementsChatToolbarButton buttonColor='rgb(0,122,255)' title='>'></ElementsChatToolbarButton>
-				<View style={{margin: 4, marginTop: 0, marginBottom: 0, minHeight: 40, borderColor: 'rgba(160,160,160,0.4)', borderWidth: 1, borderRadius: 24, flex: 1, padding: 4, flexDirection: 'row'}}>
-					<TextInput style={{margin: 4, flex: 1, padding: 4}} multiline={true} blurOnSubmit={true} placeholder='Escribe un mensaje...'  onChangeText={(newText) => { this.setState({newMessage: newText}) }} returnKeyLabel='Enviar' onSubmitEditing={()=>{ this.sendMessage() }}/>
-					<TouchableOpacity style={{margin: 4, alignItems: 'center', alignContent: 'center', justifyContent: 'center'}} onPress={()=>{ this.sendMessage() }}> <Ionicons name='md-send' size={24}/> </TouchableOpacity>
+			<ScrollView horizontal scrollEnabled={this.state.renderConditionalOptions} style={{width: '100%'}} contentContainerStyle={this.returnConditionalStyleWidth()}>
+				<View style={[ this.returnConditionalStyleWidth(),  {padding: 12, flexDirection: 'row', alignItems: 'center', paddingTop: 8, paddingBottom: 8}]}>
+					{this.renderConditionalOptions()}
+					<View style={{margin: 4, marginTop: 0, marginBottom: 0, minHeight: 40, borderColor: 'rgba(160,160,160,0.4)', borderWidth: 1, borderRadius: 24, flex: 1, padding: 4, flexDirection: 'row'}}>
+						<TextInput style={{margin: 4, flex: 1, padding: 4}} multiline={true} blurOnSubmit={true} placeholder='Escribe un mensaje...'  onChangeText={(newText) => { this.setState({newMessage: newText}) }} returnKeyLabel='Enviar' onSubmitEditing={()=>{ this.sendMessage() }} onFocus={()=>{ this.setState({renderConditionalOptions: false}) }}/>
+						<TouchableOpacity style={{margin: 4, alignItems: 'center', alignContent: 'center', justifyContent: 'center'}} onPress={()=>{ this.sendMessage() }}> <Ionicons name='md-send' size={24}/> </TouchableOpacity>
+					</View>
 				</View>
-			</View>
+			</ScrollView>
 		)
 	}
 
+
+	renderConditionalOptions(){
+		if(this.state.renderConditionalOptions){
+			return(
+				<View style={{flexDirection: 'row', alignItems: 'center'}}>
+					<ElementsChatToolbarButton buttonColor='rgba(160,160,160,0.2)' onPress={()=>{
+						App.modalPromptOpen(<PromptChatLocation onSubmit={(newLocation)=> { this.sendLocation({newLocation}) }}></PromptChatLocation>)
+					}}>
+						<MaterialIcons name='add-location' size={32} color='rgb(0,122,255)'/>
+					</ElementsChatToolbarButton>
+
+					<ElementsChatToolbarButton buttonColor='rgba(160,160,160,0.2)' onPress={()=>{
+						App.modalPromptOpen(<PromptChatServices dataTask={this.props.dataTask} onChangeCart={(arrayServicesCart)=> this.sendServices(arrayServicesCart) }/>)
+					}}>
+						<FontAwesome name='cart-plus' size={32} color='rgb(0,122,255)'/>
+					</ElementsChatToolbarButton>
+
+					<ElementsChatToolbarButton buttonColor='rgba(160,160,160,0.2)' onPress={()=>{
+						App.modalPromptOpen(<PromptEditTask dataTask={this.props.dataTask} ></PromptEditTask>)
+					}}>
+						<MaterialCommunityIcons name='account-edit' size={32} color='rgb(0,122,255)'/>
+					</ElementsChatToolbarButton>
+
+					<ElementsChatToolbarButton buttonColor='rgba(160,160,160,0.2)' onPress={()=>{}}>
+						<MaterialIcons name='close' size={32} color='rgb(255,59,48)'/>
+					</ElementsChatToolbarButton>
+
+					<ElementsChatToolbarButton buttonColor='rgb(0,122,255)' onPress={()=>{ this.toggleConditionalOptions() }}>
+						<Entypo name='chevron-small-left' size={32} color='white' />
+					</ElementsChatToolbarButton>
+
+				</View>
+			)
+		} else {
+			return(
+				<ElementsChatToolbarButton buttonColor='rgb(0,122,255)' onPress={()=>{ this.toggleConditionalOptions() }}>
+					<Entypo name='chevron-small-right' size={32} color='white' />
+				</ElementsChatToolbarButton>
+			)
+		}
+	}
 
 	render(){
 
@@ -1146,6 +1442,64 @@ export class ElementsChatInfo extends React.Component{
 		)
 	}
 }
+/* -- CHAT LOCATION BUBBLE*/
+export class ElementsChatLocation extends React.Component{
+	returnConditionalBubblePlacement(){
+		if(this.props.dataContent.USER == firebase.auth().currentUser.uid){
+			return {alignItems: 'flex-end'}
+		} else {
+			return {alignItems: 'flex-start'}
+		}
+	}
+	render(){
+		return(
+			<View style={[this.returnConditionalBubblePlacement(), {flex: 1}]}>
+				<MapView cacheEnabled style={{height: 160, margin: 8, borderRadius: 16, width: '80%'}}
+					region={{
+						latitude: this.props.dataContent.CONTENT.newLocation.coords.latitude,
+						longitude: this.props.dataContent.CONTENT.newLocation.coords.longitude,
+						latitudeDelta: 0.002,
+						longitudeDelta: 0.002,
+					}}
+				><MapView.Marker coordinate={{latitude: this.props.dataContent.CONTENT.newLocation.coords.latitude, longitude: this.props.dataContent.CONTENT.newLocation.coords.longitude}} /></MapView>
+				<View style={{borderRadius: 16, borderWidth: 1, borderColor: 'rgba(160,160,160,0.4)', padding: 8, maxWidth: '80%', margin: 8, flexDirection: 'row', alignItems: 'center'}}>
+					<Entypo name='location-pin' size={16} style={{margin: 8}}></Entypo>
+					<Text style={{fontSize: 16, flex: 1, margin: 8}}>{ this.props.dataContent.CONTENT.newLocation.address }</Text>
+				</View>
+			</View>
+		)
+	}
+}
+/* -- CHAT SERVICE BUBBLE*/
+export class ElementsChatService extends React.Component{
+	returnConditionalBubblePlacement(){
+		if(this.props.dataContent.USER == firebase.auth().currentUser.uid){
+			return {justifyContent: 'flex-end'}
+		} else {
+			return {justifyContent: 'flex-start'}
+		}
+	}
+	renderConditionalOptions(){
+		if(this.props.dataContent.USER != firebase.auth().currentUser.uid){
+			return(
+				<View style={{flexDirection: 'row', flex: 1}}>
+					<ElementsInputButton title='ACEPTAR' type='fill' buttonColor='rgb(76,217,100)' compact={true} style={{flex: 1}} textColor='white'/>
+					<ElementsInputButton title='DECLINAR' type='fill' buttonColor='rgb(255,59,48)' compact={true} style={{flex: 1}} textColor='white'/>
+				</View>
+			)
+		}
+	}
+	render(){
+		return(
+			<View style={[{padding: 8, flexDirection: 'row'}, this.returnConditionalBubblePlacement()]}>
+				<View style={{borderRadius: 16, borderWidth: 1, borderColor: 'rgba(160,160,160,0.4)', width: '80%', padding: 8}}>
+					<ElementsTaskService dataService={this.props.dataContent.CONTENT} />
+				</View>
+			</View>
+		)
+	}
+}
+
 
 /* ==== UI ELEMENTS end ==== */
 
@@ -1273,9 +1627,9 @@ export class PromptLogin extends React.Component{
     if(this.form == 'login'){
       return(
           <View style={{padding: 16, justifyContent: 'center'}}>
-            <Text style={{fontSize: 48, fontWeight: '800', margin: 8}}>INICIAR SESIÓN</Text>
+            <Text style={{fontSize: 48, fontWeight: '800', margin: 8, color: '#E69400'}}>INICIAR SESIÓN</Text>
             <ElementsInputName name='USUARIO' onChangeText={(newText)=>{ this.setState({loginUsername: newText}) }}></ElementsInputName>
-            <ElementsInputName name='CONTRASEÑA' onChangeText={(newText)=>{ this.setState({loginPassword: newText}) }}></ElementsInputName>
+            <ElementsInputName name='CONTRASEÑA' onChangeText={(newText)=>{ this.setState({loginPassword: newText}) }} onSubmitEditing={()=>{ this.login() }}></ElementsInputName>
 
             <ElementsInputButton title='INICIAR SESIÓN' type='fill' buttonColor='rgb(0,122,255)' onPress={()=>{this.login()}}></ElementsInputButton>
             <ElementsInputButton title='¿NO TIENES UNA CUENTA? REGÍSTRATE' type='outline' buttonColor='rgb(0,122,255)' onPress={()=>{this.form = 'register'; this.forceUpdate()}}></ElementsInputButton>
@@ -1284,7 +1638,7 @@ export class PromptLogin extends React.Component{
     } else {
       return(
           <View style={{padding: 16, justifyContent: 'center'}}>
-            <Text style={{fontSize: 48, fontWeight: '800', margin: 8}}>NUEVA CUENTA</Text>
+            <Text style={{fontSize: 48, fontWeight: '800', margin: 8, color: '#E69400'}}>NUEVA CUENTA</Text>
             <ElementsInputImage onPickImage={(result)=>{
 							this.setState({newUserProfileURI: result.uri});
 						}}></ElementsInputImage>
@@ -1453,14 +1807,14 @@ export class PromptSuccess extends React.Component{
 /* -- ADD JOB_CATEGORY*/
 export class PromptAddCategory extends React.Component{
 	state={
-		categoryObj: {},
+		categoryObj: {name : null},
 		shouldAddService: false,
 		newTitleAddService: '',
 		newPriceAddService: 0
 	}
 	newCategoryObj = {
 		'DESCRIPTION': '',
-		'NAME': '',
+		'NAME': null,
 		'SERVICES': []
 	}
 	addService(){
@@ -1479,11 +1833,23 @@ export class PromptAddCategory extends React.Component{
 	}
 
 	addCategory(){
-		objCurrentUserData.data.JOB_CATEGORIES.push(this.newCategoryObj);
-		firebase.firestore().collection('USERS').doc(firebase.auth().currentUser.uid).update({
-			'JOB_CATEGORIES': objCurrentUserData.data.JOB_CATEGORIES,
-		});
-		this.forceUpdate()
+		if(this.newCategoryObj.NAME){
+			objCurrentUserData.data.JOB_CATEGORIES.push(this.newCategoryObj);
+			firebase.firestore().collection('USERS').doc(firebase.auth().currentUser.uid).update({
+				'JOB_CATEGORIES': objCurrentUserData.data.JOB_CATEGORIES,
+			});
+			this.forceUpdate();
+		}
+		else {
+			alert("Selecciona una categoría");
+		}
+		this.props.onAddCategory;
+	}
+
+	returnCategoriesUnselected(){
+		return arrayCategoriesData.filter((item)=>{
+			return !objCurrentUserData.data.JOB_CATEGORIES.some((otherItem) => otherItem['NAME'] == item['ID'])
+		})
 	}
 
 	renderConditionalAdd(){
@@ -1514,7 +1880,7 @@ export class PromptAddCategory extends React.Component{
 					<Text style={{margin: 8, fontSize: 24, fontWeight: '800'}}>AÑADIR CATEGORÍA</Text>
 				</View>
 				<View style={{padding: 8}}>
-					<ContainerCategories data={arrayCategoriesData} onSelectCategory={(categoryObj)=>{ this.newCategoryObj['NAME'] = categoryObj.ID; this.forceUpdate() }}/>
+					<ContainerCategories data={this.returnCategoriesUnselected()} onSelectCategory={(categoryObj)=>{ this.newCategoryObj['NAME'] = categoryObj.ID; this.forceUpdate() }}/>
 				</View>
 				<View style={{padding: 16}}>
 					<ElementsInputTextarea value={this.newCategoryObj.DESCRIPTION} placeholder='AÑADE UNA DESCRPIPCIÓN' type='card' onChangeText={(newText)=>{
@@ -1534,8 +1900,7 @@ export class PromptAddCategory extends React.Component{
 					{this.renderConditionalAdd()}
 				</View>
 				<View style={{padding: 8}}>
-					<ElementsInputButton title='AÑADIR' type='fill' buttonColor='rgb(0,122,255)' onPress={()=>{this.addCategory()}}></ElementsInputButton>
-
+					<ElementsInputButton title='AÑADIR' type='fill' buttonColor='rgb(0,122,255)' onPress={()=>{this.addCategory(); App.modalPromptClose()}}></ElementsInputButton>
 					<ElementsInputButton title='CANCELAR' type='fill' buttonColor='rgba(200,200,200,0.6)' onPress={()=>{App.modalPromptClose()}}></ElementsInputButton>
 
 				</View>
@@ -1554,7 +1919,6 @@ export class PromptEditTask extends React.Component{
 			DESCRIPTION: this.state.newDescription,
 			LOCATION: new firebase.firestore.GeoPoint( this.state.newLocation.coords.latitude, this.state.newLocation.coords.longitude ),
 			ADDRESS: this.state.newLocation.address,
-			LAST_UPDATE: new Date(),
 		});
 		App.modalPromptClose();
 	}
@@ -1683,6 +2047,67 @@ export class PromptHireUser extends React.Component{
 /* -- PAYMENT */
 //! WRITE COMPONENENT
 
+/* -- LOCATION */
+export class PromptChatLocation extends React.Component{
+	state={newLocation: null}
+	render(){
+		return(
+			<ScrollView>
+				<View style={{padding: 16}}>
+					<Text style={{margin: 8, fontSize: 24, fontWeight: '800'}}>ENVIAR UBICACIÓN</Text>
+					<ElementsInputLocation showMap={true} onChangeLocation={(newLocation) => { this.setState({newLocation: newLocation}) }}/>
+				</View>
+
+				<View style={{padding: 16}}>
+					<ElementsInputButton title='ENVIAR' type='fill' buttonColor='black' textColor='white' onPress={()=>{ this.props.onSubmit(this.state.newLocation); App.modalPromptClose() }}></ElementsInputButton>
+					<ElementsInputButton title='CANCELAR' type='fill' buttonColor='rgba(200,200,200,0.6)' onPress={()=>{App.modalPromptClose()}}></ElementsInputButton>
+				</View>
+			</ScrollView>
+		)
+	}
+}
+/* -- SERVICES*/
+export class PromptChatServices extends React.Component{
+	arrayServices = [];
+	arrayServicesCart = [];
+	returnSubtotal(){
+		let subtotal = 0;
+		this.arrayServicesCart.map((l,i)=>{
+			subtotal = subtotal + (l.PRICE*l.QUANTITY);
+		})
+		return subtotal;
+	}
+	async componentWillMount(){
+		let uidWorker = await this.props.dataTask.data.USERS.find((item) => item['ROLE'] == 'WORKER')['UID'];
+		firebase.firestore().collection('USERS').doc(uidWorker).get().then((doc)=>{
+			this.arrayServices = doc.data().JOB_CATEGORIES.find((item) => item['NAME'] == this.props.dataTask.data.CATEGORY)['SERVICES'];
+			this.forceUpdate();
+		})
+	}
+	render(){
+		return(
+			<ScrollView>
+				<View style={{padding: 16}}>
+					<Text style={{margin: 8, fontSize: 24, fontWeight: '800'}}>AÑADIR AL CARRITO</Text>
+					{this.arrayServices.map((l,i)=>{
+						return <ElementsTaskService editable dataService={l} onChangeCart={(dataService)=>{
+							this.arrayServicesCart[i] = dataService;
+							this.forceUpdate();
+						}}/>
+					})}
+				</View>
+				<View style={{padding: 16}}>
+					<Text style={{margin: 8, fontSize: 40, fontWeight: '800'}}>{ '$'+this.returnSubtotal() }</Text>
+				</View>
+				<View style={{padding: 16}}>
+					<ElementsInputButton title='ENVIAR' type='fill' buttonColor='black' textColor='white' onPress={()=>{ this.props.onChangeCart(this.arrayServicesCart); this.forceUpdate() }}></ElementsInputButton>
+					<ElementsInputButton title='CANCELAR' type='fill' buttonColor='rgba(200,200,200,0.6)' onPress={()=>{App.modalPromptClose()}}></ElementsInputButton>
+				</View>
+			</ScrollView>
+		)
+	}
+}
+
 
 /* ==== PROMPTS end ==== */
 
@@ -1716,7 +2141,7 @@ export class ScreenProfile extends React.Component{
 export class ScreenNewJob extends React.Component{
   static navigationOptions = {
     headerTitle: ' ',
-    headerStyle: {borderBottomColor: 'transparent', borderBottomWidth: 0, backgroundColor: 'white'},
+    headerStyle: {borderBottomColor: 'transparent', borderBottomWidth: 0, backgroundColor: 'white', height: 0},
     cardStyle: {backgroundColor: 'white'}
   }
   state={
@@ -1741,42 +2166,46 @@ export class ScreenNewJob extends React.Component{
 
 
 	publishTask(){
-		firebase.firestore().collection("TASKS").doc().set({
-			ADDRESS: this.state.jobDetailsLocation.address,
-			LOCATION: new firebase.firestore.GeoPoint( this.state.jobDetailsLocation.coords.latitude, this.state.jobDetailsLocation.coords.longitude ),
-			DESCRIPTION: this.state.jobDetailsDescription,
-			CATEGORY: this.state.selectCategoryObj.ID,
-			STATUS: 'UNASIGNED',
-			LAST_UPDATE: new Date(),
-			USERS: [
-				{
-					UID: firebase.auth().currentUser.uid,
-					ROLE: 'CLIENT'
-				}
-			],
-			CONTENT: [
-				{
-					CONTENT: "PUBLISHED",
-					DATE: new Date(),
-					TYPE: "INFO"
-				}
-			]
-		}).then(()=>{
-			App.modalPromptOpen(
-				<PromptSuccess title='LA TAREA FUE PUBLICADA CON ÉXITO' subtitle='Pudes ver actualizaciones en tu BUZÓN'></PromptSuccess>
-			)
-		})
+		if(this.state.selectCategoryObj.ID == 'CERCA' || !this.state.jobDetailsDescription){
+			alert('INGRESA TODOS LOS DATOS');
+		} else {
+			firebase.firestore().collection("TASKS").doc().set({
+				ADDRESS: this.state.jobDetailsLocation.address,
+				LOCATION: new firebase.firestore.GeoPoint( this.state.jobDetailsLocation.coords.latitude, this.state.jobDetailsLocation.coords.longitude ),
+				DESCRIPTION: this.state.jobDetailsDescription,
+				CATEGORY: this.state.selectCategoryObj.ID,
+				STATUS: 'UNASIGNED',
+				LAST_UPDATE: new Date(),
+				USERS: [
+					{
+						UID: firebase.auth().currentUser.uid,
+						ROLE: 'CLIENT'
+					}
+				],
+				CONTENT: [
+					{
+						CONTENT: "PUBLISHED",
+						DATE: new Date(),
+						TYPE: "INFO"
+					}
+				]
+			}).then(()=>{
+				App.modalPromptOpen(
+					<PromptSuccess title='LA TAREA FUE PUBLICADA CON ÉXITO' subtitle='Pudes ver actualizaciones en tu BUZÓN'></PromptSuccess>
+				)
+			})
+		}
 	}
 
   render(){
     return(
       <SafeAreaView style={{height: '100%', backgroundColor: 'white'}}>
-        <ScrollView>
-					<View style={{padding: 16, paddingTop: 0}}>
-						<Text style={{margin: 8, fontSize: 40, fontWeight: '800'}}>Nueva Tarea</Text>
+        <ScrollView stickyHeaderIndices={[0]}>
+					<View style={{padding: 16, paddingTop: 0, backgroundColor: 'white', paddingBottom: 0}}>
+						<Text style={{margin: 8, fontSize: 40, fontWeight: '800', color: '#E69400'}}>Nueva Tarea</Text>
 					</View>
 					<View style={{padding: 16}}>
-						<ElementsInputTextarea placeholder='DESCRÍBENOS QUÉ NECESITAS' onChangeText={(newText)=>{ this.setState({jobDetailsDescription: newText}) }}></ElementsInputTextarea>
+						<ElementsInputTextarea placeholder='Hola, me quede afuera de mi casa. Necesito un cerrajero.' onChangeText={(newText)=>{ this.setState({jobDetailsDescription: newText}) }}></ElementsInputTextarea>
           </View>
 					<View style={{padding: 16}}>
 						<ElementsInputLocation name='DIRECCIÓN' onChangeLocation={(newLoc)=>{ this.setState({jobDetailsLocation: newLoc}) }}></ElementsInputLocation>
@@ -1787,7 +2216,7 @@ export class ScreenNewJob extends React.Component{
 
         </ScrollView>
         <View style={{padding: 16, paddingTop: 4, paddingBottom: 4}}>
-          <ElementsInputButton type='fill' title='PUBLICAR' buttonColor='rgb(0,122,255)' onPress={()=>{this.publishTask()}} />
+          <ElementsInputButton type='fill' title='PUBLICAR' buttonColor='#E69400' onPress={()=>{this.publishTask()}} />
         </View>
       </SafeAreaView>
     )
@@ -1798,6 +2227,27 @@ export class ScreenNewJob extends React.Component{
 export class ScreenSettings extends React.Component{
 	userBio = '';
 	userJobCategories = [];
+
+	async updateProfilePic(){
+		const {status} = await Permissions.askAsync(Permissions.CAMERA_ROLL);
+    let resultImage = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      aspect: [1,1]
+    })
+    if(!resultImage.cancelled){
+			const newUserProfileResponse = await fetch(resultImage.uri);
+			const newUserProfileBlob = await newUserProfileResponse.blob();
+			firebase.storage().ref().child("PROFILE_PICS/"+firebase.auth().currentUser.uid).put(newUserProfileBlob);
+			this.forceUpdate();
+    }
+	}
+
+	updateProfileBio(){
+		firebase.firestore().collection('USERS').doc(firebase.auth().currentUser.uid).update({
+			'BIO': this.userBio
+		})
+	}
+
 	async componentWillMount(){
 		this.userBio =  await objCurrentUserData.data.BIO;
 		this.userJobCategories =  await objCurrentUserData.data.JOB_CATEGORIES;
@@ -1808,18 +2258,17 @@ export class ScreenSettings extends React.Component{
 			<SafeAreaView style={{backgroundColor: 'white'}}>
 				<ScrollView stickyHeaderIndices={[1]}>
 					<View style={{padding: 16, paddingTop: 0, paddingBottom: 0}}>
-						<Text style={{margin: 8, fontSize: 40, fontWeight: '800'}}>Tu perfil</Text>
+						<Text style={{margin: 8, fontSize: 40, fontWeight: '800', color: '#E69400'}}>Tu perfil</Text>
 					</View>
 					<View style={{padding: 16, paddingTop: 0, paddingBottom: 0, backgroundColor: 'white', borderBottomColor: 'rgba(160,160,160,0.2)', borderBottomWidth: 1}}>
-						<ElementsProfileListItem dataUser={objCurrentUserData}></ElementsProfileListItem>
+						<ElementsProfileListItem dataUser={objCurrentUserData} onPress={()=>{ this.updateProfilePic() }}></ElementsProfileListItem>
 					</View>
 					<View style={{padding: 16, paddingBottom: 0}}>
 						<Text style={{margin: 8, fontSize: 24, fontWeight: '800'}}>BIOGRAFÍA</Text>
-					</View>
-					<View style={{padding: 16, paddingTop: 0, paddingBottom: 0}}>
 						<ElementsInputTextarea value={this.userBio} placeholder='BIOGRAFÍA' fontSize={16} onChangeText={(newText)=>{
 							console.log(newText)
 						}}></ElementsInputTextarea>
+						<ElementsInputButton type='fill' title='ACTUALIZAR INFORMACIÓN' buttonColor='rgb(0,122,255)' onPress={()=>{this.updateProfileBio()}} />
 					</View>
 					<View style={{padding: 16, paddingBottom: 0}}>
 						<Text style={{margin: 8, fontSize: 24, fontWeight: '800'}}>PERFILES</Text>
@@ -1831,7 +2280,7 @@ export class ScreenSettings extends React.Component{
 					})}
 					<View style={{padding: 16}}>
 						<ElementsInputButton type='fill' title='AÑADIR PERFIL' buttonColor='rgba(160,160,160,0.2)' onPress={()=>{
-							App.modalPromptOpen(<PromptAddCategory></PromptAddCategory>)
+							App.modalPromptOpen(<PromptAddCategory onAddCategory={()=>{this.forceUpdate()}}></PromptAddCategory>)
 						}}></ElementsInputButton>
 					</View>
 				</ScrollView>
@@ -1843,8 +2292,12 @@ export class ScreenSettings extends React.Component{
 export class ScreenExplore extends React.Component{
 	static navigationOptions = {
     headerTitle: ' ',
-    headerStyle: {borderBottomColor: 'transparent', borderBottomWidth: 0, backgroundColor: 'white'},
+    headerStyle: {borderBottomColor: 'transparent', borderBottomWidth: 0, backgroundColor: 'white', height: 0},
   }
+	state={
+		'locationResult': {'longitude': 0, 'latitude': 0},
+		'locationAddress': 'Ubicación no disponible'
+	}
 	arrayWorkers = [];
 	getWorkers(){
 		var arrayWorkers = [];
@@ -1857,19 +2310,44 @@ export class ScreenExplore extends React.Component{
 			this.forceUpdate();
 		});
 	}
+
+	async getCurrentLocation(){
+
+		let locationResult = await Location.getCurrentPositionAsync();
+		this.setState({locationResult: locationResult.coords});
+
+		let locationAddress = await Location.reverseGeocodeAsync({latitude: locationResult.coords.latitude, longitude: locationResult.coords.longitude})
+  	this.setState({ locationAddress:  locationAddress[0].name + ', '  + locationAddress[0].city + ' ' + locationAddress[0].postalCode + ' ' + locationAddress[0].region });
+	}
+
+
 	async componentWillMount(){
+		this.getCurrentLocation();
 		this.getWorkers();
 	}
 	render(){
 		return(
 			<SafeAreaView style={{backgroundColor: 'white'}}>
 				<ScrollView stickyHeaderIndices={[1]}>
-					<View style={{padding: 16, paddingTop: 0, paddingBottom: 0}}>
-						<Text style={{margin: 8, fontSize: 40, fontWeight: '800'}}>Explorar</Text>
-					</View>
+					<MapView style={{width: '100%', height: Dimensions.get('window').height*0.5 }} region={{
+						latitude: this.state.locationResult.latitude,
+						longitude: this.state.locationResult.longitude,
+						latitudeDelta: 0.002,
+						longitudeDelta: 0.002,
+					}} >
+						<MapView.Marker coordinate={{latitude: this.state.locationResult.latitude, longitude: this.state.locationResult.longitude}} ref='marker'>
+							<MapView.Callout tooltip={this.state.locationAddress} />
+						</MapView.Marker>
+						<LinearGradient colors={['white', 'rgba(255,255,255,0.4)']} start={[0.5,0]} end={[0.5,0.2]} style={{padding: 16, paddingTop: 0, height: '100%'}}>
+							<Text style={{margin: 8, fontSize: 40, fontWeight: '800', color: '#E69400'}}>Explorar</Text>
+							<Text style={{margin: 8, fontWeight: '600', fontSize: 16}}>CERCA DE:{"\n"}{this.state.locationAddress} </Text>
+						</LinearGradient>
+					</MapView>
+
 					<ElementsHeaderToolbar>
 						<ElementsInputName name='BUSCAR' onChangeText={(newText)=>{console.log(newText)}}  compact={true} flyOutTitle={false}></ElementsInputName>
 					</ElementsHeaderToolbar>
+
 					<View style={{padding: 16}}>
 						<Text style={{margin: 8, fontSize: 24, fontWeight: '800'}}>Tareas cerca de mí</Text>
 						{this.props.screenProps.arrayTasksData.filter((item) => item.data.STATUS == 'UNASIGNED' ).map((l,i)=>{
@@ -1888,23 +2366,32 @@ export class ScreenExplore extends React.Component{
 	}
 
 	componentDidMount(){
-		//alert(JSON.stringify(this.props))
+		this.refs.marker.showCallout()
 	}
 
 }
 
 export class ScreenTasks extends React.Component{
+	static navigationOptions = {
+		headerTitle: ' ',
+		headerStyle: {borderBottomColor: 'transparent', borderBottomWidth: 0, backgroundColor: 'white', height: 0},
+	}
 	arrayTasks = [];
 	currentUserFirstName = '';
 
 	async componentWillMount(){
 		//this.getTasks();
 		this.currentUserFirstName = await objCurrentUserData.data.NAME.split(" ")[0];
+		this.forceUpdate();
+	}
+
+	componentWillReceiveProps(){
+		this.forceUpdate();
 	}
 
 	renderTasks(){
-		return this.props.screenProps.arrayTasksData.filter((item) => item.notifyUser == true ).map((l,i)=>{
-			return <ElementsNotificationListItem dataTask={l} key={i} onPress={()=>{
+		return this.props.screenProps.arrayTasksData.filter((item) => item.notifyUser == true ).sort( (a,b)=> b.data.LAST_UPDATE-a.data.LAST_UPDATE ).map((l,i)=>{
+			return <ElementsNotificationListItem dataTask={l} key={l.ID} onPress={()=>{
 				this.props.navigation.navigate("ScreenTasksConversation", {dataTask: l })
 			}}></ElementsNotificationListItem>
 		})
@@ -1913,9 +2400,9 @@ export class ScreenTasks extends React.Component{
 	render(){
 		return(
 			<SafeAreaView style={{backgroundColor: 'white', height: '100%'}}>
-				<ScrollView>
-					<View style={{padding: 16, paddingTop: 0, paddingBottom: 0}}>
-						<Text style={{margin: 8, fontSize: 40, fontWeight: '800'}}>Buzón</Text>
+				<ScrollView stickyHeaderIndices={[0]}>
+					<View style={{padding: 16, paddingTop: 0, paddingBottom: 0, backgroundColor: 'white'}}>
+						<Text style={{margin: 8, fontSize: 40, fontWeight: '800', color: '#E69400'}}>Buzón</Text>
 					</View>
 					<TouchableOpacity style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, paddingTop: 0, paddingBottom: 0}} onPress={()=>{
 						this.props.navigation.navigate('ScreenSettings');
@@ -1942,10 +2429,15 @@ export class ScreenTasks extends React.Component{
 	}
 }
 
+let thisScreenTasksConversations;
 export class ScreenTasksConversation extends React.Component{
 
-	arrayInterestedWorkers = []
+	static navigationOptions = ({navigation}) => ({
+		//header: <SafeAreaView style={{backgroundColor: 'white', padding: 16, paddingTop: 0, paddingBottom: 0}}><ElementsNotificationListItem dataTask={navigation.state.params.dataTask} /></SafeAreaView>
+	})
 
+	chatScrollView;
+	arrayInterestedWorkers = []
 	getInterestedWorkers(){
 		this.props.navigation.state.params.dataTask.data.USERS.filter((item) => item.UID != firebase.auth().currentUser.uid).map((l,i)=>{
 			firebase.firestore().collection('USERS').doc(l.UID).get().then((doc)=>{
@@ -1983,6 +2475,10 @@ export class ScreenTasksConversation extends React.Component{
 							return <ElementsChatBubble dataContent={l} />
 						} else if ( l.TYPE == 'INFO'){
 							return <ElementsChatInfo dataContent={l} />
+						} else if ( l.TYPE == 'MESSAGE/LOCATION'){
+							return <ElementsChatLocation dataContent={l} />
+						} else if ( l.TYPE == 'SERVICE'){
+							return <ElementsChatService dataContent={l} />
 						} else {
 							return <Text style={{margin: 8}}>{JSON.stringify(l)}</Text>
 						}
@@ -1991,6 +2487,11 @@ export class ScreenTasksConversation extends React.Component{
 			)
 		}
 	}
+
+	componentWillReceiveProps(){
+		this.forceUpdate();
+	}
+
 	componentWillMount(){
 		this.getInterestedWorkers();
 	}
@@ -1998,14 +2499,18 @@ export class ScreenTasksConversation extends React.Component{
 	render(){
 		return(
 			<SafeAreaView style={{backgroundColor: 'white', flex: 1}}>
-				<ScrollView snapToAlignment='end' ref={ ref => this.chatScrollView = ref }>
+				<ScrollView snapToAlignment='end' ref='chatScrollView'>
 					<ElementsTaskDetails dataTask={this.props.navigation.state.params.dataTask}></ElementsTaskDetails>
 					{this.renderInterestedWorkers()}
 					{this.renderTaskContents()}
+
 				</ScrollView>
 				<ElementsChatToolbar dataTask={this.props.navigation.state.params.dataTask} ></ElementsChatToolbar>
 			</SafeAreaView>
 		)
+	}
+	componentDidMount(){
+		this.refs.chatScrollView.scrollToEnd();
 	}
 }
 
@@ -2015,10 +2520,10 @@ const AppContents = TabNavigator({
 			ScreenExplore: { screen: ScreenExplore},
 			ScreenExploreProfile: {screen: ScreenProfile},
 			ScreenExploreTask: {screen: ScreenTasksConversation},
-		}),
+		}, {headerMode: 'screen'}),
 		navigationOptions: ()=>({
 			tabBarLabel: 'Explorar',
-			tabBarIcon: ({tintColor}) => (<Ionicons name='ios-search' size={24} color={tintColor}></Ionicons>)
+			tabBarIcon: ({tintColor}) => (<MaterialIcons name='search' size={32} color={tintColor}></MaterialIcons>)
 		})
 	},
 	TabScreenNewJob: {
@@ -2027,7 +2532,7 @@ const AppContents = TabNavigator({
 		}),
 		navigationOptions: ()=>({
 			tabBarLabel: 'Nuevo',
-			tabBarIcon: ({tintColor}) => (<MaterialIcons name='add-box' size={24} color={tintColor}></MaterialIcons>)
+			tabBarIcon: ({tintColor}) => (<MaterialIcons name='add-box' size={32} color={tintColor}></MaterialIcons>)
 		})
 	},
 	TabScreenTasks: {
@@ -2036,20 +2541,26 @@ const AppContents = TabNavigator({
 			ScreenTasksConversation: {screen: ScreenTasksConversation},
 			ScreenSettings: {screen: ScreenSettings},
 			ScreenTasksProfile: {screen: ScreenProfile}
-		}),
+		}, {headerMode: 'screen'}),
 		navigationOptions: ()=>({
 			tabBarLabel: 'Buzón',
-			tabBarIcon: ({tintColor}) => (<Ionicons name='ios-notifications' size={24} color={tintColor}></Ionicons>),
+			tabBarIcon: ({tintColor}) => (<MaterialIcons name='notifications' size={32} color={tintColor}></MaterialIcons>),
 		})
 	}
-}, {
-	navigationOptions: ({navigation})=>{
-		let tabBarVisible = true;
-	  if (navigation.state.index > 0) {
-	    tabBarVisible = false;
-	  }
-		return {tabBarVisible: tabBarVisible}
-}})
+},
+{
+	tabBarPosition: 'bottom',
+	navigationOptions: ({navigation})=>({
+		tabBarVisible: !navigation.state.index > 0,
+		swipeEnabled:  !navigation.state.index > 0
+	}),
+	tabBarOptions: {
+		activeTintColor: '#E69400',
+		showIcon: true,
+		showLabel: true,
+		style: {padding: 0}
+	}
+})
 
 
 
@@ -2074,7 +2585,7 @@ export default class App extends React.Component {
 	renderModalPrompt(){
 		if(App.modalPromptShow){
 			return(
-				<BlurView tint='light' intensity={90} style={{height: '100%', width: '100%', position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, zIndex: 10, justifyContent: 'center'}}>
+				<BlurView tint='light' intensity={80} style={{height: '100%', width: '100%', position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, zIndex: 10, justifyContent: 'center'}}>
 					<SafeAreaView style={{justifyContent: 'center', height: '100%', width: '100%'}}>
 					{App.modalPromptContents}
 					</SafeAreaView>
@@ -2103,7 +2614,7 @@ export default class App extends React.Component {
 	}
 	getTasksData(){
 		firebase.firestore().collection('TASKS').onSnapshot((data)=>{
-			alert('UPDATE TO TASKS')
+			//alert('UPDATE TO TASKS')
 			this.forceUpdate();
 			arrayTasksData = [];
 			data.forEach((doc)=>{
@@ -2120,6 +2631,8 @@ export default class App extends React.Component {
 	}
   async componentWillMount(){
 		thisApp = this;
+		//alert(expoPushToken);
+
     var config = {
       apiKey: "AIzaSyB2tCpkhMMJLGceChtUdrf0PqvpoZtHO74",
       authDomain: "mango-db.firebaseapp.com",
@@ -2158,6 +2671,23 @@ export default class App extends React.Component {
       return <PromptLogin></PromptLogin>
     }
   }
+
+	async componentDidMount(){
+		//if(this.state.isUserLoggedIn){
+			await Permissions.askAsync(Permissions.NOTIFICATIONS);
+			await Permissions.askAsync(Permissions.LOCATION);
+
+			let expoPushToken = await Notifications.getExpoPushTokenAsync();
+			let locationResult = await Location.getCurrentPositionAsync();
+			//this.setState({locationResult: locationResult.coords});
+
+			firebase.firestore().collection('USERS').doc( firebase.auth().currentUser.uid ).update({
+				EXPO_PUSH_TOKEN: expoPushToken,
+				LOCATION: new firebase.firestore.GeoPoint(locationResult.coords.latitude, locationResult.coords.longitude)
+			})
+		//}
+	}
+
 }
 
 const styles = StyleSheet.create({

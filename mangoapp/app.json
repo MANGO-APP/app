@@ -6,13 +6,12 @@
     "privacy": "public",
     "sdkVersion": "27.0.0",
     "platforms": ["ios", "android"],
-    "version": "1.0.0",
+    "version": "2.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "splash": {
-      "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#ffa500"
     },
     "updates": {
       "fallbackToCacheTimeout": 0
@@ -21,7 +20,15 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "net.ddns.edvilme.mango",
+			"infoPlist": {
+				"NSLocationAlwaysUsageDesciption": "Para poder contratar un servicio, y poder ofrecerte una mejor experiencia, requerimos de tu ubicación. No la compartiremos con nadie sin preguntarte primero.",
+				"NSLocationWhenInUseUsageDescription": "Para poder contratar un servicio, y poder ofrecerte una mejor experiencia, requerimos de tu ubicación. No la compartiremos con nadie sin preguntarte primero.",
+			}
+    },
+    "android": {
+      "package": "net.ddns.edvilme.mango",
     }
   }
 }
